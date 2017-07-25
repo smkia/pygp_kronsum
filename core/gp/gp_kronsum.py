@@ -109,11 +109,9 @@ class KronSumGP(GPLVM):
         Ystar_covar = []
         if compute_cov:
             R_star_star = SP.exp(2 * hyperparams['covar_r']) * SP.dot(Xstar_r, Xstar_r.T)
-            R_tr_star = self.covar_r.Kcross(hyperparams['covar_r'])
+            R_tr_star = Kstar_r
+            C = Kstar_c
             
-            C = self.covar_c.K(hyperparams['covar_c'])
-            
-            S = SP.kron(KV['Stilde_c'], KV['Stilde_r']) + 1        
             kron_Uctilde_Urtilde = SP.kron(KV['Utilde_c'], KV['Utilde_r'])
             
             K_tilde_inv = SP.dot(1./S * kron_Uctilde_Urtilde, kron_Uctilde_Urtilde.T)
