@@ -80,21 +80,23 @@ class KronSumGP(GPLVM):
             self._covar_cache['U_%s'%covar_id] = U
             self._covar_cache['S_%s'%covar_id] = S
 
-    def predict(self,hyperparams,Xstar_r=None,debugging=False):
+    def predict(self,hyperparams, Xstar_r, compute_cov = False, debugging=False):
         """
         predict over new training points
         """
         self._update_inputs(hyperparams)
         KV = self.get_covariances(hyperparams,debugging=debugging)
-        if Xstar_r!=None:
-            self.covar_r.Xcross = Xstar_r
+        self.covar_r.Xcross = Xstar_r
         
         Kstar_r = self.covar_r.Kcross(hyperparams['covar_r'])
         Kstar_c = self.covar_c.K(hyperparams['covar_c']) # kernel over tasks is fixed!
-        S = SP.kron(KV['Stilde_c'],KV['Stilde_r'])+1
-        USUc = SP.dot(SP.sqrt(1./KV['S_s']) * KV['U_s'],KV['Utilde_c'])
+        S = SP.kron(KV['Stilde_c'], KV['Stilde_r']) + 1
+        USUc = SP.dot(SP.sqrt(1./KV['S_s']) * KV['U_s'],KV['Utilde_c'])  
+        #USUc = SP.dot(KV['Utilde_c'].T, SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])),KV['U_s'].T))
         USUr = SP.dot(SP.sqrt(1./KV['S_o']) * KV['U_o'],KV['Utilde_r'])
-        KinvY = SP.dot(USUr,SP.dot(unravel(ravel(KV['UYtildeU_rc']) * 1./S,self.n,self.t),USUc.T))
+        #USUr = SP.dot(SP.dot(KV['U_o'], SP.diag(SP.sqrt(1./KV['S_o']))),KV['Utilde_r'])
+        KinvY = SP.dot(USUr, SP.dot(unravel(ravel(KV['UYtildeU_rc']) * 1./S, self.n, self.t), USUc.T))
+        #KinvY = SP.dot(USUr, SP.dot(unravel(ravel(KV['UYtildeU_rc']) * 1./S, self.n, self.t), USUc))
         Ystar = SP.dot(Kstar_r.T,SP.dot(KinvY,Kstar_c))
         Ystar = unravel(Ystar,self.covar_r.n_cross,self.t)
 
@@ -103,7 +105,35 @@ class KronSumGP(GPLVM):
             Ynaive = SP.dot(Kstar.T,KV['alpha'])
             Ynaive = unravel(Ynaive,self.covar_r.n_cross,self.t)
             assert SP.allclose(Ystar,Ynaive), 'ouch, prediction does not work out'
-        return Ystar
+            
+        Ystar_covar = []
+        if compute_cov:
+            R_star_star = SP.exp(2 * hyperparams['covar_r']) * SP.dot(Xstar_r, Xstar_r.T)
+            R_tr_star = self.covar_r.Kcross(hyperparams['covar_r'])
+            
+            C = self.covar_c.K(hyperparams['covar_c'])
+            
+            S = SP.kron(KV['Stilde_c'], KV['Stilde_r']) + 1        
+            kron_Uctilde_Urtilde = SP.kron(KV['Utilde_c'], KV['Utilde_r'])
+            
+            K_tilde_inv = SP.dot(1./S * kron_Uctilde_Urtilde, kron_Uctilde_Urtilde.T)
+            #K_tilde_inv1 = SP.dot(kron_Uctilde_Urtilde, SP.dot(SP.diag(1./S), kron_Uctilde_Urtilde.T))
+            
+            left_side = SP.kron(SP.dot(C, KV['U_s'] * SP.sqrt(1./KV['S_s']))
+                , SP.dot(R_tr_star.T, KV['U_o'] * SP.sqrt(1./KV['S_o'])))
+            # left_side1 = SP.kron(SP.dot(C, SP.dot(KV['U_s'], SP.diag(SP.sqrt(1./KV['S_s']))))
+            #    , SP.dot(R_tr_star.T, SP.dot(KV['U_o'], SP.diag(SP.sqrt(1./KV['S_o'])))))
+            
+            right_side = SP.kron(SP.dot(C, SP.sqrt(1./KV['S_s']) * KV['U_s']).T
+                , SP.dot(SP.sqrt(1./KV['S_o']) * KV['U_o'], R_tr_star))        
+            #right_side1 = SP.kron(SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])), SP.dot(KV['U_s'].T, C))
+            #    , SP.dot(SP.diag(SP.sqrt(1./KV['S_o'])), SP.dot(KV['U_o'].T, R_tr_star)))
+            
+            Ystar_covar = SP.diag(SP.kron(C, R_star_star) - SP.dot(left_side, SP.dot(K_tilde_inv, right_side)))
+            Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
+            
+        return Ystar, Ystar_covar
+
     
     def get_covariances(self,hyperparams,debugging=False):
         """
@@ -133,12 +163,21 @@ class KronSumGP(GPLVM):
         keys = list(set(hyperparams.keys()) & set(['covar_c','covar_s','X_c','X_s']))
         if not(self._is_cached(hyperparams,keys=keys)):
             KV['USi_c'] = SP.sqrt(1./KV['S_c']) * KV['U_c']
+            #KV['USi_c'] = SP.dot(SP.diag(SP.sqrt(1./KV['S_c'])), KV['U_c'].T)
+            #KV['USi_c_t'] = SP.dot(KV['U_c'], SP.diag(SP.sqrt(1./KV['S_c'])))
+            
             KV['USi_s'] = SP.sqrt(1./KV['S_s']) * KV['U_s']
+            #KV['USi_s'] = SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])), KV['U_s'].T)
+            #KV['USi_s_t'] = SP.dot(KV['U_s'], SP.diag(SP.sqrt(1./KV['S_s'])))
         
             Ktilde_c = SP.dot(KV['USi_s'].T,SP.dot(KV['K_c'],KV['USi_s']))
+            #Ktilde_c = SP.dot(KV['USi_s'], SP.dot(KV['K_c'], KV['USi_s_t']))
             Stilde_c,Utilde_c = LA.eigh(Ktilde_c)
+            
             Ktilde_s = SP.dot(KV['USi_c'].T,SP.dot(KV['K_s'],KV['USi_c']))
+            #Ktilde_s = SP.dot(KV['USi_c'], SP.dot(KV['K_s'], KV['USi_c_t']))
             Stilde_s,Utilde_s = LA.eigh(Ktilde_s)
+            
             KV['Ktilde_c'] = Ktilde_c; KV['Utilde_c'] = Utilde_c; KV['Stilde_c'] = Stilde_c
             KV['Ktilde_s'] = Ktilde_s; KV['Utilde_s'] = Utilde_s; KV['Stilde_s'] = Stilde_s
 
@@ -146,20 +185,33 @@ class KronSumGP(GPLVM):
         keys = list(set(hyperparams.keys()) & set(['covar_r','covar_o','X_r','X_o']))
         if not(self._is_cached(hyperparams,keys=keys)):
             KV['USi_r'] = SP.sqrt(1./KV['S_r']) * KV['U_r']
+            #KV['USi_r'] = SP.dot(SP.diag(SP.sqrt(1./KV['S_r'])), KV['U_r'].T)
+            #KV['USi_r_t'] = SP.dot(KV['U_r'], SP.diag(SP.sqrt(1./KV['S_r'])))
+            
             KV['USi_o'] = SP.sqrt(1./KV['S_o']) * KV['U_o']
+            #KV['USi_o'] = SP.dot(SP.diag(SP.sqrt(1./KV['S_o'])), KV['U_o'].T)
+            #KV['USi_o_t'] = SP.dot(KV['U_o'], SP.diag(SP.sqrt(1./KV['S_o'])))            
+            
             Ktilde_r = SP.dot(KV['USi_o'].T,SP.dot(KV['K_r'],KV['USi_o']))
+            #Ktilde_r = SP.dot(KV['USi_o'], SP.dot(KV['K_r'], KV['USi_o_t']))
             Stilde_r,Utilde_r = LA.eigh(Ktilde_r)
+            
             Ktilde_o = SP.dot(KV['USi_r'].T,SP.dot(KV['K_o'],KV['USi_r']))
+            #Ktilde_o = SP.dot(KV['USi_r'], SP.dot(KV['K_o'], KV['USi_r_t']))
             Stilde_o,Utilde_o = LA.eigh(Ktilde_o)
+            
             KV['Ktilde_r'] = Ktilde_r; KV['Utilde_r'] = Utilde_r; KV['Stilde_r'] = Stilde_r
             KV['Ktilde_o'] = Ktilde_o; KV['Utilde_o'] = Utilde_o; KV['Stilde_o'] = Stilde_o
 
     
-        KV['UYtildeU_rc'] = SP.dot(KV['Utilde_r'].T,SP.dot(KV['USi_o'].T,SP.dot(self.Y,SP.dot(KV['USi_s'],KV['Utilde_c']))))
-        KV['UYtildeU_os'] = SP.dot(KV['Utilde_o'].T,SP.dot(KV['USi_r'].T,SP.dot(self.Y,SP.dot(KV['USi_c'],KV['Utilde_s']))))
-
-        KV['Stilde_rc'] = SP.kron(KV['Stilde_c'],KV['Stilde_r'])+1
-        KV['Stilde_os'] = SP.kron(KV['Stilde_s'],KV['Stilde_o'])+1
+        KV['UYtildeU_rc'] = SP.dot(KV['Utilde_r'].T,SP.dot(KV['USi_o'].T,SP.dot(self.Y,SP.dot(KV['USi_s'],KV['Utilde_c']))))  # Bug
+        #KV['UYtildeU_rc'] = SP.dot(KV['Utilde_r'].T, SP.dot(KV['USi_o'], SP.dot(self.Y, SP.dot(KV['USi_s_t'], KV['Utilde_c']))))
+        
+        KV['UYtildeU_os'] = SP.dot(KV['Utilde_o'].T,SP.dot(KV['USi_r'].T,SP.dot(self.Y,SP.dot(KV['USi_c'],KV['Utilde_s']))))  # Bug
+        #KV['UYtildeU_os'] = SP.dot(KV['Utilde_o'].T, SP.dot(KV['USi_r'], SP.dot(self.Y, SP.dot(KV['USi_c_t'], KV['Utilde_s']))))
+        
+        KV['Stilde_rc'] = SP.kron(KV['Stilde_c'],KV['Stilde_r']) + 1
+        KV['Stilde_os'] = SP.kron(KV['Stilde_s'],KV['Stilde_o']) + 1
         
         if debugging:
             # needed later
@@ -195,10 +247,10 @@ class KronSumGP(GPLVM):
             return 1E6
         
         Si = 1./KV['Stilde_rc']
-        lml_quad = 0.5*(ravel(KV['UYtildeU_rc'])**2 * Si).sum()
-        lml_det = 0.5*(SP.log(KV['S_s']).sum()*self.n + SP.log(KV['S_o']).sum()*self.t)
-        lml_det+= 0.5*SP.log(KV['Stilde_rc']).sum()
-        lml_const = 0.5*self.nt*(SP.log(2*SP.pi))
+        lml_quad = 0.5 * (ravel(KV['UYtildeU_rc'])**2 * Si).sum()
+        lml_det = 0.5 * (SP.log(KV['S_s']).sum() * self.n + SP.log(KV['S_o']).sum() * self.t)
+        lml_det += 0.5 * SP.log(KV['Stilde_rc']).sum()
+        lml_const = 0.5 * self.nt * (SP.log(2 * SP.pi))
         
         if debugging:
             # do calculation without kronecker tricks and compare

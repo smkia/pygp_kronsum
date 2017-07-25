@@ -10,20 +10,8 @@ import experiments.initialize as initialize
 import numpy as np
 from  sklearn.preprocessing import StandardScaler
 import core.likelihood.likelihood_base as lik
-
-
-def data_simulation(n_samples, n_dimensions, n_tasks, n_latent, snr):
-    # true parameters
-    X_c = SP.random.randn(n_tasks, n_latent)
-    X_s = SP.random.randn(n_tasks, n_latent)
-    X_r = SP.random.randn(n_samples, n_dimensions) * snr
-    R = SP.dot(X_r, X_r.T)
-    C = SP.dot(X_c, X_c.T)
-    Sigma = SP.dot(X_s, X_s.T)
-    K = SP.kron(C, R) + SP.kron(Sigma, SP.eye(n_samples))
-    y = SP.random.multivariate_normal(SP.zeros(n_tasks * n_samples), K)
-    Y = SP.reshape(y, (n_samples, n_tasks), order='F')
-    return X_r, Y
+from scipy.io import loadmat
+from sklearn.metrics import mean_squared_error
     
 def get_r2(Y1,Y2):
     """
@@ -43,19 +31,18 @@ def get_r2(Y1,Y2):
     return r2
 
 if __name__ == "__main__":
-    # simulation settings
-    n_latent = 1
-    n_tasks = 4
-    n_samples = 20
-    n_dimensions = 5
-    snr = 0.1
     
-    # Data Simulation
-    X, Y = data_simulation(n_samples, n_dimensions, n_tasks, n_latent, snr) 
-    X_train  = X[0 : np.round(0.9 * n_samples), :]
-    Y_train  = Y[0 : np.round(0.9 * n_samples), :]
-    X_test  = X[np.round(0.9 * n_samples) :, :]
-    Y_test  = Y[np.round(0.9 * n_samples) :, :]
+    matContent = loadmat('...\\dataset.mat')
+    
+    X_train  = matContent['X_train']
+    Y_train  = matContent['Y_train']
+    X_test  = matContent['X_test']
+    Y_test  = matContent['Y_test']
+    
+    n_samples = X_train.shape[0]
+    n_tasks = Y_train.shape[1]
+    n_dimensions = X_train.shape[1]
+    n_latent = 10
     
     # Normalization
     X_scaler = StandardScaler()
@@ -82,8 +69,9 @@ if __name__ == "__main__":
         Y_pred[:,i] = gp.predict(hyperparams_opt, Xstar_r = X_test)
     
     Y_pred = Y_scaler.inverse_transform(np.reshape(Y_pred,(Y_test.shape[0], Y_test.shape[1])))
-    r2_GP_base = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_base)
+    r2_GP_base = get_r2(Y_test, Y_test)
+    mse_GP_base = mean_squared_error(Y_test,Y_pred, multioutput='uniform_average')
+    print 'GP_Base: R2 = %f, MSE = %f' %(np.mean(r2_GP_base), mse_GP_base)
     
     ################################# Pooling Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPpool_LIN', Y_train.T, X_train, None)
@@ -102,7 +90,8 @@ if __name__ == "__main__":
     Y_pred = gp.predict(hyperparams_opt, Xstar_r = X_test)
     Y_pred = Y_scaler.inverse_transform(Y_pred)    
     r2_GP_pool = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_pool)
+    mse_GP_pool = mean_squared_error(Y_test,Y_pred, multioutput='uniform_average')
+    print 'GP_Pool: R2 = %f, MSE = %f' %(np.mean(r2_GP_pool), mse_GP_pool)
     
     ################################# Kronprod Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPkronprod_LIN', Y_train.T, 
@@ -123,7 +112,8 @@ if __name__ == "__main__":
     Y_pred = gp.predict(hyperparams_opt, Xstar_r = X_test)
     Y_pred = Y_scaler.inverse_transform(Y_pred)
     r2_GP_kronprod = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_kronprod)
+    mse_GP_kronprod = mean_squared_error(Y_test,Y_pred, multioutput='uniform_average')
+    print 'GP_Kronprod: R2 = %f, MSE = %f' %(np.mean(r2_GP_kronprod), mse_GP_kronprod)
 
     ################################# Kronsum Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPkronsum_LIN', Y_train.T, 
@@ -149,10 +139,13 @@ if __name__ == "__main__":
     # Training: optimize hyperparameters
     hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
                                                       bounds, Ifilter = Ifilter)
-                                                      
+    
+    
     # Testing
-    Y_pred, Y_pred_cov = gp.predict(hyperparams, Xstar_r = X_test, compute_cov = True)
+    Y_pred = gp.predict(hyperparams_opt, Xstar_r = X_test[0:10,:])
+    Y_pred_cov = gp.predict_cov(hyperparams_opt, Xstar_r = X_test[0:10,:])
     
     Y_pred = Y_scaler.inverse_transform(Y_pred)
     r2_GP_kronsum = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_kronsum)
+    mse_GP_kronsum = mean_squared_error(Y_test,Y_pred, multioutput='uniform_average')
+    print 'GP_Kronsum: R2 = %f, MSE = %f' %(np.mean(r2_GP_kronsum), mse_GP_kronsum)
