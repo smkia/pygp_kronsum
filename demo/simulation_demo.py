@@ -142,8 +142,7 @@ if __name__ == "__main__":
     
     
     # Testing
-    Y_pred = gp.predict(hyperparams_opt, Xstar_r = X_test[0:10,:])
-    Y_pred_cov = gp.predict_cov(hyperparams_opt, Xstar_r = X_test[0:10,:])
+    Y_pred, Y_pred_cov = gp.predict(hyperparams, Xstar_r = X_test[0:10,:], compute_cov = True)
     
     Y_pred = Y_scaler.inverse_transform(Y_pred)
     r2_GP_kronsum = get_r2(Y_test, Y_pred)
