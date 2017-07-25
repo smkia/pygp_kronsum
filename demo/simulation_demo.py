@@ -32,7 +32,7 @@ def get_r2(Y1,Y2):
 
 if __name__ == "__main__":
     
-    matContent = loadmat('..\\demo\\simulated_data.mat')
+    matContent = loadmat('.\\demo\\simulated_data.mat')
     
     X_train  = matContent['X_train']
     Y_train  = matContent['Y_train']
