@@ -10,20 +10,28 @@ import experiments.initialize as initialize
 import numpy as np
 from  sklearn.preprocessing import StandardScaler
 import core.likelihood.likelihood_base as lik
+from sklearn.metrics import mean_squared_error
 
 
-def data_simulation(n_samples, n_dimensions, n_tasks, n_latent, snr):
+def data_simulation(n_samples, n_dimensions, n_tasks, n_latent, snr, train_portion):
     # true parameters
     X_c = SP.random.randn(n_tasks, n_latent)
     X_s = SP.random.randn(n_tasks, n_latent)
-    X_r = SP.random.randn(n_samples, n_dimensions) * snr
-    R = SP.dot(X_r, X_r.T)
+    X = SP.random.randn(n_samples, n_dimensions) * snr
+    R = SP.dot(X, X.T)
     C = SP.dot(X_c, X_c.T)
     Sigma = SP.dot(X_s, X_s.T)
     K = SP.kron(C, R) + SP.kron(Sigma, SP.eye(n_samples))
     y = SP.random.multivariate_normal(SP.zeros(n_tasks * n_samples), K)
     Y = SP.reshape(y, (n_samples, n_tasks), order='F')
-    return X_r, Y
+    temp = np.random.permutation(n_samples)
+    idx_train = temp[0 : np.round(train_portion * n_samples),]
+    idx_test = temp[np.round(train_portion * n_samples):,]
+    X_train = X[idx_train,:]
+    X_test = X[idx_test,:]
+    Y_train = Y[idx_train,:]
+    Y_test = Y[idx_test,:]
+    return X_train, X_test, Y_train, Y_test
     
 def get_r2(Y1,Y2):
     """
@@ -46,16 +54,13 @@ if __name__ == "__main__":
     # simulation settings
     n_latent = 1
     n_tasks = 4
-    n_samples = 20
+    n_samples = 100
     n_dimensions = 5
-    snr = 0.1
+    snr = 0.01
+    train_portion = 0.5
     
     # Data Simulation
-    X, Y = data_simulation(n_samples, n_dimensions, n_tasks, n_latent, snr) 
-    X_train  = X[0 : np.round(0.9 * n_samples), :]
-    Y_train  = Y[0 : np.round(0.9 * n_samples), :]
-    X_test  = X[np.round(0.9 * n_samples) :, :]
-    Y_test  = Y[np.round(0.9 * n_samples) :, :]
+    X_train, X_test, Y_train, Y_test = data_simulation(n_samples, n_dimensions, n_tasks, n_latent, snr, train_portion) 
     
     # Normalization
     X_scaler = StandardScaler()
@@ -67,7 +72,8 @@ if __name__ == "__main__":
     Y_train = Y_scaler.transform(Y_train)
     
     ################################# GP_base Approach ########################
-    Y_pred = np.zeros(np.shape(Y_test))
+    Y_pred_base = np.zeros(np.shape(Y_test))
+    Y_pred_cov_base = np.zeros(np.shape(Y_test))
     for i in range(n_tasks):
         hyperparams, Ifilter, bounds = initialize.init('GPbase_LIN', Y_train[:,i].T, X_train, None)
         covariance = linear.LinearCF(n_dimensions = n_dimensions)
@@ -79,30 +85,36 @@ if __name__ == "__main__":
         hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
                                                       bounds, Ifilter = Ifilter)
         # Testing
-        Y_pred[:,i] = gp.predict(hyperparams_opt, Xstar_r = X_test)
+        Y_pred_base[:,i], Y_pred_cov_base[:,i] = gp.predict(hyperparams_opt, Xstar_r = X_test)
     
-    Y_pred = Y_scaler.inverse_transform(np.reshape(Y_pred,(Y_test.shape[0], Y_test.shape[1])))
-    r2_GP_base = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_base)
+    Y_pred_base = Y_scaler.inverse_transform(np.reshape(Y_pred_base,(Y_test.shape[0], Y_test.shape[1])))
+    Y_pred_cov_base = Y_pred_cov_base * Y_scaler.var_
+    r2_GP_base = get_r2(Y_test, Y_pred_base)
+    mse_GP_base = mean_squared_error(Y_test,Y_pred_base, multioutput='uniform_average')
+    print 'GP_Base: R2 = %f, MSE = %f' %(np.mean(r2_GP_base), mse_GP_base)
     
     ################################# Pooling Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPpool_LIN', Y_train.T, X_train, None)
     covar_c = linear.LinearCF(n_dimensions = 1) # vector of 1s
     covar_r = linear.LinearCF(n_dimensions = n_dimensions)
     likelihood = lik.GaussIsoLik()
+    covar_r.X = X_train
     gp = gp_kronprod.KronProdGP(covar_r = covar_r, covar_c = covar_c, likelihood = likelihood)
     gp.setData(Y = Y_train, X_r = X_train, X_c = SP.ones((Y_train.shape[1],1)))
 
-    covar_r.X = X_train
     
     # Training: optimize hyperparameters
     hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
                                                       bounds, Ifilter = Ifilter)
     # Testing
-    Y_pred = gp.predict(hyperparams_opt, Xstar_r = X_test)
-    Y_pred = Y_scaler.inverse_transform(Y_pred)    
-    r2_GP_pool = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_pool)
+    Y_pred_pool, Y_pred_cov_pool = gp.predict(hyperparams_opt, Xstar_r = X_test, compute_cov = True)
+    
+    Y_pred_pool = Y_scaler.inverse_transform(Y_pred_pool)    
+    Y_pred_cov_pool = Y_pred_cov_pool * Y_scaler.var_
+    
+    r2_GP_pool = get_r2(Y_test, Y_pred_pool)
+    mse_GP_pool = mean_squared_error(Y_test, Y_pred_pool, multioutput='uniform_average')
+    print 'GP_Pool: R2 = %f, MSE = %f' %(np.mean(r2_GP_pool), mse_GP_pool)   
     
     ################################# Kronprod Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPkronprod_LIN', Y_train.T, 
@@ -110,20 +122,23 @@ if __name__ == "__main__":
     covar_c = lowrank.LowRankCF(n_dimensions = n_latent)
     covar_r = linear.LinearCF(n_dimensions = n_dimensions)
     likelihood = lik.GaussIsoLik()
-    gp = gp_kronprod.KronProdGP(covar_r = covar_r, covar_c = covar_c, likelihood = likelihood)
-    gp.setData(Y = Y_train, X_r = X_train)
-
     covar_r.X = X_train
     covar_c.X = hyperparams['X_c']
+    gp = gp_kronprod.KronProdGP(covar_r = covar_r, covar_c = covar_c, likelihood = likelihood)
+    gp.setData(Y = Y_train, X_r = X_train)
     
     # Training: optimize hyperparameters
     hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
                                                       bounds, Ifilter = Ifilter)
     # Testing
-    Y_pred = gp.predict(hyperparams_opt, Xstar_r = X_test)
-    Y_pred = Y_scaler.inverse_transform(Y_pred)
-    r2_GP_kronprod = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_kronprod)
+    Y_pred_prod, Y_pred_cov_prod = gp.predict(hyperparams_opt, Xstar_r = X_test , compute_cov = True)
+    
+    Y_pred_prod = Y_scaler.inverse_transform(Y_pred_prod)
+    Y_pred_cov_prod = Y_pred_cov_prod * Y_scaler.var_
+    
+    r2_GP_prod = get_r2(Y_test, Y_pred_prod)
+    mse_GP_prod = mean_squared_error(Y_test, Y_pred_prod, multioutput='uniform_average')
+    print 'GP_Kronprod: R2 = %f, MSE = %f' %(np.mean(r2_GP_prod), mse_GP_prod) 
 
     ################################# Kronsum Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPkronsum_LIN', Y_train.T, 
@@ -151,8 +166,11 @@ if __name__ == "__main__":
                                                       bounds, Ifilter = Ifilter)
                                                       
     # Testing
-    Y_pred, Y_pred_cov = gp.predict(hyperparams, Xstar_r = X_test, compute_cov = True)
+    Y_pred_sum, Y_pred_cov_sum = gp.predict(hyperparams, Xstar_r = X_test, compute_cov = True)
     
-    Y_pred = Y_scaler.inverse_transform(Y_pred)
-    r2_GP_kronsum = get_r2(Y_test, Y_pred)
-    print np.mean(r2_GP_kronsum)
+    Y_pred_sum = Y_scaler.inverse_transform(Y_pred_sum)
+    Y_pred_cov_sum = Y_pred_cov_sum * Y_scaler.var_
+
+    r2_GP_sum = get_r2(Y_test, Y_pred_sum)
+    mse_GP_sum = mean_squared_error(Y_test, Y_pred_sum, multioutput='uniform_average')
+    print 'GP_Kronsum: R2 = %f, MSE = %f' %(np.mean(r2_GP_sum), mse_GP_sum) 
