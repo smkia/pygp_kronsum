@@ -122,12 +122,10 @@ class KronSumGP(GPLVM):
             # left_side1 = SP.kron(SP.dot(C, SP.dot(KV['U_s'], SP.diag(SP.sqrt(1./KV['S_s']))))
             #    , SP.dot(R_tr_star.T, SP.dot(KV['U_o'], SP.diag(SP.sqrt(1./KV['S_o'])))))
             
-            right_side = SP.kron(SP.dot(C, SP.sqrt(1./KV['S_s']) * KV['U_s']).T
-                , SP.dot(SP.sqrt(1./KV['S_o']) * KV['U_o'], R_tr_star))        
-            #right_side1 = SP.kron(SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])), SP.dot(KV['U_s'].T, C))
+            #right_side = SP.kron(SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])), SP.dot(KV['U_s'].T, C))
             #    , SP.dot(SP.diag(SP.sqrt(1./KV['S_o'])), SP.dot(KV['U_o'].T, R_tr_star)))
             
-            Ystar_covar = SP.diag(SP.kron(C, R_star_star) - SP.dot(left_side, SP.dot(K_tilde_inv, right_side)))
+            Ystar_covar = SP.diag(SP.kron(C, R_star_star) - SP.dot(left_side, SP.dot(K_tilde_inv, left_side.T)))
             Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
             
         return Ystar, Ystar_covar

@@ -73,15 +73,14 @@ class KronProdGP(GPLVM):
         if 'X_r' in hyperparams.keys():
             self.covar_r.X = hyperparams['X_r']
 
-    def predict(self,hyperparams,Xstar_r=None,debugging=False):
+    def predict(self, hyperparams, Xstar_r, compute_cov = False, debugging = False):
         """
         predict on Xstar
         """
         self._update_inputs(hyperparams)
         KV = self.get_covariances(hyperparams,debugging=debugging)
         
-        if Xstar_r !=None:
-            self.covar_r.Xcross = Xstar_r
+        self.covar_r.Xcross = Xstar_r
         
         Kstar_r = self.covar_r.Kcross(hyperparams['covar_r'])
         Kstar_c = self.covar_c.K(hyperparams['covar_c'])
@@ -95,7 +94,23 @@ class KronProdGP(GPLVM):
             Ynaive = SP.dot(Kstar.T,KV['alpha'])
             Ynaive = unravel(Ynaive,self.covar_r.n_cross,self.t)
             assert SP.allclose(Ystar,Ynaive), 'ouch, prediction does not work out'
-        return Ystar
+        
+        Ystar_covar = []
+        if compute_cov:
+            R_star_star = SP.exp(2 * hyperparams['covar_r']) * SP.dot(Xstar_r, Xstar_r.T)
+            R_tr_star = Kstar_r
+            C = Kstar_c
+            
+            kron_Uc_Ur = SP.kron(KV['U_c'], KV['U_r'])
+            
+            K_inv = SP.dot(1./KV['S'] * kron_Uc_Ur, kron_Uc_Ur.T)
+            
+            left_side = SP.kron(C, R_tr_star.T)
+            
+            Ystar_covar = SP.diag(SP.kron(C, R_star_star) - SP.dot(left_side, SP.dot(K_inv, left_side.T)))
+            Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
+            
+        return Ystar, Ystar_covar
   
     
     def get_covariances(self,hyperparams,debugging=False):

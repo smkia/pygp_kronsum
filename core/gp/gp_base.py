@@ -11,6 +11,7 @@ import collections
 
 
 
+
 class GP(object):
     """
     Gaussian Process regression class. Holds all information for the GP regression to take place.
@@ -154,7 +155,13 @@ class GP(object):
         KV = self.get_covariances(hyperparams)
         Kstar = self.covar.Kcross(hyperparams['covar'])
         Ystar = SP.dot(Kstar.T,KV['alpha'])
-        return Ystar.flatten()
+        
+        # Computing the prediction covariance(should be double checked)
+        R_star_star = SP.exp(2 * hyperparams['covar']) * SP.dot(Xstar, Xstar.T)
+        v = LA.cho_solve((KV['L'], True), Kstar)
+        Ystar_cov = R_star_star - v.T.dot(v) #+ SP.exp(2 * hyperparams['covar']))
+        
+        return Ystar.flatten(), SP.diag(Ystar_cov)
         
     def get_covariances(self,hyperparams):
         """
