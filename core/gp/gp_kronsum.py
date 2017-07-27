@@ -12,6 +12,8 @@ from core.linalg.linalg_matrix import jitChol
 import core.likelihood.likelihood_base as likelihood_base
 import collections
 from core.linalg.linalg_matrix import jitEigh
+from core.util.utilities import fast_dot, fast_kron
+
 
 class KronSumGP(GPLVM):
     """GPLVM for kronecker type covariance structures
@@ -108,24 +110,24 @@ class KronSumGP(GPLVM):
             
         Ystar_covar = []
         if compute_cov:
-            R_star_star = SP.exp(2 * hyperparams['covar_r']) * SP.dot(Xstar_r, Xstar_r.T)
-            R_tr_star = Kstar_r
-            C = Kstar_c
+            R_star_star = SP.float32(SP.exp(2 * hyperparams['covar_r']) * fast_dot(Xstar_r, Xstar_r.T))
+            R_tr_star = SP.float32(Kstar_r)
+            C = SP.float32(Kstar_c)
             
-            kron_Uctilde_Urtilde = SP.kron(KV['Utilde_c'], KV['Utilde_r'])
+            kron_Uctilde_Urtilde = fast_kron(SP.float32(KV['Utilde_c']), SP.float32(KV['Utilde_r']))
             
-            K_tilde_inv = SP.dot(1./S * kron_Uctilde_Urtilde, kron_Uctilde_Urtilde.T)
+            K_tilde_inv = fast_dot(1./S * kron_Uctilde_Urtilde, kron_Uctilde_Urtilde.T)
             #K_tilde_inv1 = SP.dot(kron_Uctilde_Urtilde, SP.dot(SP.diag(1./S), kron_Uctilde_Urtilde.T))
             
-            left_side = SP.kron(SP.dot(C, KV['U_s'] * SP.sqrt(1./KV['S_s']))
-                , SP.dot(R_tr_star.T, KV['U_o'] * SP.sqrt(1./KV['S_o'])))
+            left_side = fast_kron(fast_dot(C, SP.float32(KV['U_s']) * SP.sqrt(1./SP.float32(KV['S_s'])))
+                , fast_dot(R_tr_star.T, SP.float32(KV['U_o']) * SP.sqrt(1./SP.float32(KV['S_o']))))
             # left_side1 = SP.kron(SP.dot(C, SP.dot(KV['U_s'], SP.diag(SP.sqrt(1./KV['S_s']))))
             #    , SP.dot(R_tr_star.T, SP.dot(KV['U_o'], SP.diag(SP.sqrt(1./KV['S_o'])))))
             
             #right_side = SP.kron(SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])), SP.dot(KV['U_s'].T, C))
             #    , SP.dot(SP.diag(SP.sqrt(1./KV['S_o'])), SP.dot(KV['U_o'].T, R_tr_star)))
             
-            Ystar_covar = SP.diag(SP.kron(C, R_star_star) - SP.dot(left_side, SP.dot(K_tilde_inv, left_side.T)))
+            Ystar_covar = SP.diag(fast_kron(C, R_star_star) - fast_dot(left_side, fast_dot(K_tilde_inv, left_side.T)))
             Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
             
         return Ystar, Ystar_covar

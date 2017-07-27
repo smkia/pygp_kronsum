@@ -10,6 +10,7 @@ from gplvm import GPLVM
 
 from core.linalg.linalg_matrix import jitChol
 import core.likelihood.likelihood_base as likelihood_base
+from core.util.utilities import fast_dot, fast_kron
 
 
 def ravel(Y):
@@ -97,17 +98,17 @@ class KronProdGP(GPLVM):
         
         Ystar_covar = []
         if compute_cov:
-            R_star_star = SP.exp(2 * hyperparams['covar_r']) * SP.dot(Xstar_r, Xstar_r.T)
-            R_tr_star = Kstar_r
-            C = Kstar_c
+            R_star_star = SP.float32(SP.exp(2 * hyperparams['covar_r']) * fast_dot(Xstar_r, Xstar_r.T))
+            R_tr_star = SP.float32(Kstar_r)
+            C = SP.float32(Kstar_c)
             
-            kron_Uc_Ur = SP.kron(KV['U_c'], KV['U_r'])
+            kron_Uc_Ur = fast_kron(SP.float32(KV['U_c']), SP.float32(KV['U_r']))
             
-            K_inv = SP.dot(1./KV['S'] * kron_Uc_Ur, kron_Uc_Ur.T)
+            K_inv = fast_dot(1./SP.float32(KV['S']) * kron_Uc_Ur, kron_Uc_Ur.T)
             
-            left_side = SP.kron(C, R_tr_star.T)
+            left_side = fast_kron(C, R_tr_star.T)
             
-            Ystar_covar = SP.diag(SP.kron(C, R_star_star) - SP.dot(left_side, SP.dot(K_inv, left_side.T)))
+            Ystar_covar = SP.diag(fast_kron(C, R_star_star) - fast_dot(left_side, fast_dot(K_inv, left_side.T)))
             Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
             
         return Ystar, Ystar_covar
