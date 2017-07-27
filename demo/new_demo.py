@@ -11,8 +11,7 @@ import numpy as np
 from  sklearn.preprocessing import StandardScaler
 import core.likelihood.likelihood_base as lik
 from sklearn.metrics import mean_squared_error
-
-
+        
 def data_simulation(n_samples, n_dimensions, n_tasks, n_latent, snr, train_portion):
     # true parameters
     X_c = SP.random.randn(n_tasks, n_latent)
@@ -56,7 +55,7 @@ if __name__ == "__main__":
     n_tasks = 4
     n_samples = 100
     n_dimensions = 5
-    snr = 0.01
+    snr = 1
     train_portion = 0.5
     
     # Data Simulation
@@ -166,7 +165,7 @@ if __name__ == "__main__":
                                                       bounds, Ifilter = Ifilter)
                                                       
     # Testing
-    Y_pred_sum, Y_pred_cov_sum = gp.predict(hyperparams, Xstar_r = X_test, compute_cov = True)
+    Y_pred_sum, Y_pred_cov_sum = gp.predict(hyperparams_opt, Xstar_r = X_test, compute_cov = True)
     
     Y_pred_sum = Y_scaler.inverse_transform(Y_pred_sum)
     Y_pred_cov_sum = Y_pred_cov_sum * Y_scaler.var_

@@ -34,10 +34,13 @@ if __name__ == "__main__":
     
     matContent = loadmat('.\\demo\\simulated_data.mat')
     
-    X_train  = matContent['X_train']
-    Y_train  = matContent['Y_train']
-    X_test  = matContent['X_test']
-    Y_test  = matContent['Y_test']
+    n_samples = 20
+    n_tasks = 4
+    
+    X_train  = matContent['X_train'][:n_samples,:]
+    Y_train  = matContent['Y_train'][:n_samples,:n_tasks]
+    X_test  = matContent['X_test'][:n_samples,:]
+    Y_test  = matContent['Y_test'][:n_samples,:n_tasks]
     
     n_samples = X_train.shape[0]
     n_tasks = Y_train.shape[1]
@@ -147,7 +150,7 @@ if __name__ == "__main__":
                                                       bounds, Ifilter = Ifilter)
     
     # Testing
-    Y_pred_sum, Y_pred_cov_sum = gp.predict(hyperparams, Xstar_r = X_test, compute_cov = True)
+    Y_pred_sum, Y_pred_cov_sum = gp.predict(hyperparams_opt, Xstar_r = X_test, compute_cov = True)
     
     Y_pred_sum = Y_scaler.inverse_transform(Y_pred_sum)
     Y_pred_cov_sum = Y_pred_cov_sum * Y_scaler.var_
