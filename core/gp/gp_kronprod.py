@@ -98,17 +98,23 @@ class KronProdGP(GPLVM):
         
         Ystar_covar = []
         if compute_cov:
-            R_star_star = SP.float32(SP.exp(2 * hyperparams['covar_r']) * fast_dot(Xstar_r, Xstar_r.T))
-            R_tr_star = SP.float32(Kstar_r)
-            C = SP.float32(Kstar_c)
+            R_star_star = SP.exp(2 * hyperparams['covar_r']) * fast_dot(Xstar_r, Xstar_r.T)
+            R_tr_star = Kstar_r
+            C = Kstar_c
             
-            kron_Uc_Ur = fast_kron(SP.float32(KV['U_c']), SP.float32(KV['U_r']))
+            #kron_Uc_Ur = fast_kron(KV['U_c'], KV['U_r'])
+            #K_inv = fast_dot(1./KV['S'] * kron_Uc_Ur, kron_Uc_Ur.T)
+            #left_side = fast_kron(C, R_tr_star.T)
+            #Ystar_covar = SP.diag(fast_kron(C, R_star_star) - fast_dot(left_side, fast_dot(K_inv, left_side.T)))
             
-            K_inv = fast_dot(1./SP.float32(KV['S']) * kron_Uc_Ur, kron_Uc_Ur.T)
+            Ystar_covar = SP.diag(fast_kron(C, R_star_star) - fast_dot(1./KV['S'] * 
+                fast_kron(fast_dot(C, KV['U_c']), fast_dot(R_tr_star.T, KV['U_r']))
+                , fast_kron(fast_dot(KV['U_c'].T, C), fast_dot(KV['U_r'].T, R_tr_star))))
             
-            left_side = fast_kron(C, R_tr_star.T)
+            #Ystar_covar1 = SP.diag(fast_kron(C, R_star_star) - 1./KV['S'] * 
+            #    fast_kron(fast_dot(C, fast_dot(KV['U_c'], fast_dot(KV['U_c'].T, C))), 
+            #              fast_dot(R_tr_star.T, fast_dot(KV['U_r'], fast_dot(KV['U_r'].T, R_tr_star)))))            
             
-            Ystar_covar = SP.diag(fast_kron(C, R_star_star) - fast_dot(left_side, fast_dot(K_inv, left_side.T)))
             Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
             
         return Ystar, Ystar_covar
