@@ -159,7 +159,7 @@ class GP(object):
         # Computing the prediction covariance(should be double checked)
         R_star_star = SP.exp(2 * hyperparams['covar']) * SP.dot(Xstar, Xstar.T)
         v = LA.cho_solve((KV['L'], True), Kstar)
-        Ystar_cov = R_star_star - v.T.dot(v) #+ SP.exp(2 * hyperparams['covar']))
+        Ystar_cov = R_star_star - Kstar.T.dot(v)
         
         return Ystar.flatten(), SP.diag(Ystar_cov)
         
