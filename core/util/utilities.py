@@ -28,3 +28,20 @@ def partial_kron(A, B, i, RorC = 'r'):
         for j in range(m):
             r[j*p:(j+1)*p,] = A[j,i] * B[:,i]
     return r
+    
+def compute_r2(Y1, Y2):
+    """
+    return list of squared correlation coefficients (one per task)
+    """
+    if Y1.ndim==1:
+        Y1 = SP.reshape(Y1,(Y1.shape[0],1))
+    if Y2.ndim==1:
+        Y2 = SP.reshape(Y2,(Y2.shape[0],1))
+
+    t = Y1.shape[1]
+    r2 = []
+    for i in range(t):
+        _r2 = SP.corrcoef(Y1[:,i],Y2[:,i])[0,1]**2
+        r2.append(_r2)
+    r2 = SP.array(r2)
+    return r2
