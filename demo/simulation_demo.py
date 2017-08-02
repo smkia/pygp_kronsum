@@ -12,35 +12,24 @@ from  sklearn.preprocessing import StandardScaler
 import core.likelihood.likelihood_base as lik
 from scipy.io import loadmat
 from sklearn.metrics import mean_squared_error
-    
-def get_r2(Y1, Y2):
-    """
-    return list of squared correlation coefficients (one per task)
-    """
-    if Y1.ndim==1:
-        Y1 = SP.reshape(Y1,(Y1.shape[0],1))
-    if Y2.ndim==1:
-        Y2 = SP.reshape(Y2,(Y2.shape[0],1))
-
-    t = Y1.shape[1]
-    r2 = []
-    for i in range(t):
-        _r2 = SP.corrcoef(Y1[:,i],Y2[:,i])[0,1]**2
-        r2.append(_r2)
-    r2 = SP.array(r2)
-    return r2
+from core.util.utilities import compute_r2
+from core.util.normod import extreme_value_prob, normative_prob_map, threshold_NPM
+from sklearn.metrics import roc_auc_score
+import seaborn as sns
+import pickle
 
 if __name__ == "__main__":
     
     matContent = loadmat('.\\demo\\simulated_data.mat')
     
-    n_samples = 20
-    n_tasks = 4
+    n_samples = 150
+    n_tasks = 100
     
     X_train  = matContent['X_train'][:n_samples,:]
     Y_train  = matContent['Y_train'][:n_samples,:n_tasks]
     X_test  = matContent['X_test'][:n_samples,:]
     Y_test  = matContent['Y_test'][:n_samples,:n_tasks]
+    labels = np.squeeze(matContent['labels'])
     
     n_samples = X_train.shape[0]
     n_tasks = Y_train.shape[1]
@@ -59,6 +48,7 @@ if __name__ == "__main__":
     ################################# GP_base Approach ########################
     Y_pred_base = np.zeros(np.shape(Y_test))
     Y_pred_cov_base = np.zeros(np.shape(Y_test))
+    s_n2_base = np.zeros([n_tasks,])
     for i in range(n_tasks):
         hyperparams, Ifilter, bounds = initialize.init('GPbase_LIN', Y_train[:,i].T, X_train, None)
         covariance = linear.LinearCF(n_dimensions = n_dimensions)
@@ -71,12 +61,30 @@ if __name__ == "__main__":
                                                       bounds, Ifilter = Ifilter)
         # Testing
         Y_pred_base[:,i], Y_pred_cov_base[:,i]  = gp.predict(hyperparams_opt, Xstar_r = X_test)
+        s_n2_base[i] = np.exp(2 * hyperparams_opt['lik'])
     
     Y_pred_base = Y_scaler.inverse_transform(np.reshape(Y_pred_base,(Y_test.shape[0], Y_test.shape[1])))
     Y_pred_cov_base = Y_pred_cov_base * Y_scaler.var_
-    r2_GP_base = get_r2(Y_test, Y_pred_base)
+    s_n2_base = s_n2_base * Y_scaler.var_
+    
+    NPM_base = normative_prob_map(Y_test, Y_pred_base, Y_pred_cov_base, s_n2_base)
+    abnormal_prob_base = extreme_value_prob(NPM_base, 0.01)
+    auc_base = roc_auc_score(labels,abnormal_prob_base)
+    
+    #sns.heatmap(np.reshape(threshold_NPM(NPM_base[41,:], 0.05),[10,10]))
+    
+    r2_GP_base = compute_r2(Y_test, Y_pred_base)
     mse_GP_base = mean_squared_error(Y_test,Y_pred_base, multioutput='uniform_average')
     print 'GP_Base: R2 = %f, MSE = %f' %(np.mean(r2_GP_base), mse_GP_base)
+    
+    with open('Results_base.pkl', 'wb') as f:
+        pickle.dump(dict(Y_pred_base = Y_pred_base, Y_pred_cov_base = Y_pred_cov_base, 
+                         s_n2_base = s_n2_base, NPM_base = NPM_base, 
+                         abnormal_prob_base = abnormal_prob_base, auc_base = auc_base,
+                         r2_GP_base = r2_GP_base, mse_GP_base = mse_GP_base), f)
+
+    #with open('Results_base.pkl', 'rb') as f:
+    #    a = pickle.load(f)
     
     ################################# Pooling Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPpool_LIN', Y_train.T, X_train, None)
@@ -95,10 +103,23 @@ if __name__ == "__main__":
     
     Y_pred_pool = Y_scaler.inverse_transform(Y_pred_pool)    
     Y_pred_cov_pool = Y_pred_cov_pool * Y_scaler.var_
+    s_n2_pool = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_    
     
-    r2_GP_pool = get_r2(Y_test, Y_pred_pool)
+    NPM_pool = normative_prob_map(Y_test, Y_pred_pool, Y_pred_cov_pool, s_n2_pool)
+    abnormal_prob_pool = extreme_value_prob(NPM_pool, 0.01)
+    auc_pool = roc_auc_score(labels, abnormal_prob_pool)
+    
+    #sns.heatmap(np.reshape(threshold_NPM(NPM_pool[140,:], 0.05),[10,10]))
+    
+    r2_GP_pool = compute_r2(Y_test, Y_pred_pool)
     mse_GP_pool = mean_squared_error(Y_test, Y_pred_pool, multioutput='uniform_average')
     print 'GP_Pool: R2 = %f, MSE = %f' %(np.mean(r2_GP_pool), mse_GP_pool)
+    
+    with open('Results_pool.pkl', 'wb') as f:
+        pickle.dump(dict(Y_pred_pool = Y_pred_pool, Y_pred_cov_pool = Y_pred_cov_pool, 
+                         s_n2_pool = s_n2_pool, NPM_pool = NPM_pool, 
+                         abnormal_prob_pool = abnormal_prob_pool, auc_pool = auc_pool,
+                         r2_GP_pool = r2_GP_pool, mse_GP_pool = mse_GP_pool), f)
     
     ################################# Kronprod Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPkronprod_LIN', Y_train.T, 
@@ -119,10 +140,23 @@ if __name__ == "__main__":
     
     Y_pred_prod = Y_scaler.inverse_transform(Y_pred_prod)
     Y_pred_cov_prod = Y_pred_cov_prod * Y_scaler.var_
+    s_n2_prod = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_
+   
+    NPM_prod = normative_prob_map(Y_test, Y_pred_prod, Y_pred_cov_prod, s_n2_prod)
+    abnormal_prob_prod = extreme_value_prob(NPM_prod, 0.01)
+    auc_prod = roc_auc_score(labels, abnormal_prob_prod)    
     
-    r2_GP_prod = get_r2(Y_test, Y_pred_prod)
+    #sns.heatmap(np.reshape(threshold_NPM(NPM_prod[140,:], 0.05),[10,10]))
+    
+    r2_GP_prod = compute_r2(Y_test, Y_pred_prod)
     mse_GP_prod = mean_squared_error(Y_test, Y_pred_prod, multioutput='uniform_average')
     print 'GP_Kronprod: R2 = %f, MSE = %f' %(np.mean(r2_GP_prod), mse_GP_prod) 
+    
+    with open('Results_prod.pkl', 'wb') as f:
+        pickle.dump(dict(Y_pred_prod = Y_pred_prod, Y_pred_cov_prod = Y_pred_cov_prod, 
+                         s_n2_prod = s_n2_prod, NPM_prod = NPM_prod, 
+                         abnormal_prob_prod = abnormal_prob_prod, auc_prod = auc_prod,
+                         r2_GP_prod = r2_GP_prod, mse_GP_prod = mse_GP_prod), f)
 
     ################################# Kronsum Approach ########################
     hyperparams, Ifilter, bounds = initialize.init('GPkronsum_LIN', Y_train.T, 
@@ -154,7 +188,20 @@ if __name__ == "__main__":
     
     Y_pred_sum = Y_scaler.inverse_transform(Y_pred_sum)
     Y_pred_cov_sum = Y_pred_cov_sum * Y_scaler.var_
+    s_n2_sum = np.diag(np.dot(hyperparams_opt['X_s'], hyperparams_opt['X_s'].T)) * Y_scaler.var_
 
-    r2_GP_sum = get_r2(Y_test, Y_pred_sum)
+    NPM_sum = normative_prob_map(Y_test, Y_pred_sum, Y_pred_cov_sum, s_n2_sum)
+    abnormal_prob_sum = extreme_value_prob(NPM_sum, 0.01)
+    auc_sum = roc_auc_score(labels, abnormal_prob_sum)    
+    
+    #sns.heatmap(np.reshape(threshold_NPM(NPM_sum[140,:], 0.05),[10,10]))
+
+    r2_GP_sum = compute_r2(Y_test, Y_pred_sum)
     mse_GP_sum = mean_squared_error(Y_test, Y_pred_sum, multioutput='uniform_average')
     print 'GP_Kronsum: R2 = %f, MSE = %f' %(np.mean(r2_GP_sum), mse_GP_sum) 
+
+    with open('Results_sum.pkl', 'wb') as f:
+        pickle.dump(dict(Y_pred_sum = Y_pred_sum, Y_pred_cov_sum = Y_pred_cov_sum, 
+                         s_n2_sum = s_n2_sum, NPM_sum = NPM_sum, 
+                         abnormal_prob_sum = abnormal_prob_sum, auc_sum = auc_sum,
+                         r2_GP_sum = r2_GP_sum, mse_GP_sum = mse_GP_sum), f)
