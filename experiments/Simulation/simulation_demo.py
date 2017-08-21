@@ -8,7 +8,7 @@ import core.covariance.linear as linear
 import core.covariance.diag as diag
 import core.covariance.lowrank as lowrank
 import core.optimize.optimize_base as optimize_base
-import experiments.initialize as initialize
+import core.util.initialize as initialize
 import numpy as np
 from  sklearn.preprocessing import StandardScaler
 import core.likelihood.likelihood_base as lik
