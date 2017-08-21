@@ -106,9 +106,8 @@ class KronProdGP(GPLVM):
 #                fast_kron(fast_dot(C, KV['U_c']), fast_dot(R_tr_star.T, KV['U_r']))
 #                , fast_kron(fast_dot(KV['U_c'].T, C), fast_dot(KV['U_r'].T, R_tr_star))))
             
-            Ystar_covar = SP.diag(fast_kron(C, R_star_star)) - SP.sum((1./KV['S'] * 
-                fast_kron(fast_dot(C, KV['U_c']), fast_dot(R_tr_star.T, KV['U_r']))).T
-                * fast_kron(fast_dot(KV['U_c'].T, C), fast_dot(KV['U_r'].T, R_tr_star)), axis = 0)       
+            temp = fast_kron(fast_dot(C, KV['U_c']), fast_dot(R_tr_star.T, KV['U_r']))
+            Ystar_covar = SP.diag(fast_kron(C, R_star_star)) - SP.sum((1./KV['S'] * temp).T * temp.T, axis = 0)            
             
             Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
             

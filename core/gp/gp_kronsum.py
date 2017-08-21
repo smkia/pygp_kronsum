@@ -120,9 +120,10 @@ class KronSumGP(GPLVM):
 #                                fast_kron(fast_dot(KV['Utilde_c'].T, fast_dot((SP.sqrt(1./KV['S_s']) * KV['U_s']).T, C)), 
 #                                          fast_dot(KV['Utilde_r'].T,fast_dot((SP.sqrt(1./KV['S_o']) * KV['U_o']).T,R_tr_star)))))
                                           
-            Ystar_covar = SP.diag(fast_kron(C, R_star_star)) - SP.sum((1./S * fast_kron(fast_dot(fast_dot(C, KV['U_s'] * SP.sqrt(1./KV['S_s'])),KV['Utilde_c']), 
-                                          fast_dot(fast_dot(R_tr_star.T, KV['U_o'] * SP.sqrt(1./KV['S_o'])),KV['Utilde_r']))).T * fast_kron(fast_dot(KV['Utilde_c'].T, fast_dot((SP.sqrt(1./KV['S_s']) * KV['U_s']).T, C)), 
-                                          fast_dot(KV['Utilde_r'].T,fast_dot((SP.sqrt(1./KV['S_o']) * KV['U_o']).T,R_tr_star))),axis = 0)
+                                          
+            temp =  fast_kron(fast_dot(fast_dot(C, KV['U_s'] * SP.sqrt(1./KV['S_s'])),KV['Utilde_c']), 
+                                          fast_dot(fast_dot(R_tr_star.T, KV['U_o'] * SP.sqrt(1./KV['S_o'])),KV['Utilde_r']))
+            Ystar_covar = SP.diag(fast_kron(C, R_star_star)) - SP.sum((1./S * temp).T * temp.T, axis = 0)
             
             Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
             
