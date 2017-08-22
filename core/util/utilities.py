@@ -45,7 +45,11 @@ def compute_r2(Y1, Y2):
         r2.append(_r2)
     r2 = SP.array(r2)
     return r2
-    
+ 
+def MSLL(Y_test, Y_test_hat, Y_test_sig, noise_variance):
+    Y_test_sig_star = Y_test_sig + SP.repeat(SP.reshape(noise_variance,[1,noise_variance.shape[0]]), Y_test.shape[0], axis = 0)
+    MSLL = SP.mean(0.5 * SP.log(2 * SP.pi * Y_test_sig_star) + (Y_test - Y_test_hat)**2 / (2 * Y_test_sig_star))
+    return MSLL
 
 def storeHashHDF5(group,RV):
     for key,value in RV.iteritems():

@@ -14,7 +14,7 @@ from  sklearn.preprocessing import StandardScaler
 import core.likelihood.likelihood_base as lik
 from scipy.io import loadmat
 from sklearn.metrics import mean_squared_error
-from core.util.utilities import compute_r2
+from core.util.utilities import compute_r2, MSLL
 from core.util.normod import extreme_value_prob, normative_prob_map
 from sklearn.metrics import roc_auc_score
 import pickle
@@ -41,6 +41,7 @@ if __name__ == "__main__":
                          'abnormal_prob' : np.zeros([simulation_num, n_samples]),
                          'auc' : np.zeros([simulation_num,]),
                          'r2' : np.zeros([simulation_num,]),
+                         'msll' : np.zeros([simulation_num,]),
                          'mse': np.zeros([simulation_num,]) 
                         })    
     results_pool = dict({'Y_pred':np.zeros([simulation_num, n_samples,n_tasks]),
@@ -50,6 +51,7 @@ if __name__ == "__main__":
                          'abnormal_prob' : np.zeros([simulation_num, n_samples]),
                          'auc' : np.zeros([simulation_num,]),
                          'r2' : np.zeros([simulation_num,]),
+                         'msll' : np.zeros([simulation_num,]),
                          'mse': np.zeros([simulation_num,]) 
                         })    
     
@@ -60,6 +62,7 @@ if __name__ == "__main__":
                          'abnormal_prob' : np.zeros([simulation_num, n_samples]),
                          'auc' : np.zeros([simulation_num,]),
                          'r2' : np.zeros([simulation_num,]),
+                         'msll' : np.zeros([simulation_num,]),
                          'mse': np.zeros([simulation_num,]) 
                         })
                         
@@ -70,6 +73,7 @@ if __name__ == "__main__":
                          'abnormal_prob' : np.zeros([simulation_num, n_samples]),
                          'auc' : np.zeros([simulation_num,]),
                          'r2' : np.zeros([simulation_num,]),
+                         'msll' : np.zeros([simulation_num,]),
                          'mse': np.zeros([simulation_num,]) 
                         })
                         
@@ -98,6 +102,7 @@ if __name__ == "__main__":
         Y_scaler = StandardScaler()
         Y_scaler.fit(Y_train)
         Y_train = Y_scaler.transform(Y_train)
+        Y_test_z = Y_scaler.transform(Y_test)
         
         ################################# GP_base Approach ########################
         if (method == 'base' or  method == 'all'):
@@ -119,6 +124,10 @@ if __name__ == "__main__":
             results_base['Y_pred_cov'][s,:,:] = results_base['Y_pred_cov'][s,:,:] * Y_scaler.var_
             results_base['s_n2'][s,:] = results_base['s_n2'][s,:] * Y_scaler.var_
             
+            results_base['msll'][s] = MSLL(Y_test, np.squeeze(results_base['Y_pred'][s,:,:]), 
+                                            np.squeeze(results_base['Y_pred_cov'][s,:,:]), 
+                                            np.squeeze(results_base['s_n2'][s,:]))            
+            
             results_base['NPM'][s,:,:] = normative_prob_map(Y_test, results_base['Y_pred'][s,:,:], 
                                             results_base['Y_pred_cov'][s,:,:], results_base['s_n2'][s,:])
             results_base['abnormal_prob'][s,:] = extreme_value_prob(results_base['NPM'][s,:,:], perc)
@@ -126,7 +135,7 @@ if __name__ == "__main__":
                
             results_base['r2'][s] = np.mean(compute_r2(Y_test, results_base['Y_pred'][s,:,:]))
             results_base['mse'][s] = mean_squared_error(Y_test,results_base['Y_pred'][s,:,:], multioutput='uniform_average')
-            print 'Dataset: %i, GP_Base: R2 = %f, MSE = %f, AUC = %f' %(s+1, results_base['r2'][s], results_base['mse'][s], results_base['auc'][s])
+            print 'Dataset: %i, GP_Base: R2 = %f, MSE = %f, AUC = %f, MSLL = %f' %(s+1, results_base['r2'][s], results_base['mse'][s], results_base['auc'][s], results_base['msll'][s])
             
         ################################# Pooling Approach ########################
         if (method == 'pool' or  method == 'all'): 
@@ -146,7 +155,12 @@ if __name__ == "__main__":
             
             results_pool['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_pool['Y_pred'][s,:,:])    
             results_pool['Y_pred_cov'][s,:,:] = results_pool['Y_pred_cov'][s,:,:] * Y_scaler.var_
-            results_pool['s_n2'][s,:] = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_    
+            #results_pool['s_n2'][s,:] = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_ 
+            results_pool['s_n2'][s,:] = likelihood.Kdiag(hyperparams_opt['lik'],n_tasks) * Y_scaler.var_
+            
+            results_pool['msll'][s] = MSLL(Y_test, np.squeeze(results_pool['Y_pred'][s,:,:]), 
+                                            np.squeeze(results_pool['Y_pred_cov'][s,:,:]), 
+                                            np.squeeze(results_pool['s_n2'][s,:]))
             
             results_pool['NPM'][s,:,:] = normative_prob_map(Y_test, results_pool['Y_pred'][s,:,:], 
                                           results_pool['Y_pred_cov'][s,:,:], results_pool['s_n2'][s,:])
@@ -155,7 +169,7 @@ if __name__ == "__main__":
                 
             results_pool['r2'][s] = np.mean(compute_r2(Y_test, results_pool['Y_pred'][s,:,:]))
             results_pool['mse'][s] = mean_squared_error(Y_test, results_pool['Y_pred'][s,:,:], multioutput='uniform_average')
-            print 'Dataset: %i, GP_Pool: R2 = %f, MSE = %f, AUC = %f' %(s+1,results_pool['r2'][s], results_pool['mse'][s], results_pool['auc'][s])
+            print 'Dataset: %i, GP_Pool: R2 = %f, MSE = %f, AUC = %f, MSLL = %f' %(s+1,results_pool['r2'][s], results_pool['mse'][s], results_pool['auc'][s], results_pool['msll'][s])
         
         ################################# Kronprod Approach ########################
         if (method == 'prod' or  method == 'all'):              
@@ -176,7 +190,12 @@ if __name__ == "__main__":
             
             results_prod['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_prod['Y_pred'][s,:,:])
             results_prod['Y_pred_cov'][s,:,:] = results_prod['Y_pred_cov'][s,:,:] * Y_scaler.var_
-            results_prod['s_n2'][s,:] = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_
+            #results_prod['s_n2'][s,:] = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_
+            results_prod['s_n2'][s,:] = likelihood.Kdiag(hyperparams_opt['lik'],n_tasks) * Y_scaler.var_
+            
+            results_prod['msll'][s] = MSLL(Y_test, np.squeeze(results_prod['Y_pred'][s,:,:]), 
+                                            np.squeeze(results_prod['Y_pred_cov'][s,:,:]), 
+                                            np.squeeze(results_prod['s_n2'][s,:]))
            
             results_prod['NPM'][s,:,:] = normative_prob_map(Y_test, results_prod['Y_pred'][s,:,:], 
                                                     results_prod['Y_pred_cov'][s,:,:], results_prod['s_n2'][s,:])
@@ -185,7 +204,7 @@ if __name__ == "__main__":
             
             results_prod['r2'][s] = np.mean(compute_r2(Y_test, results_prod['Y_pred'][s,:,:]))
             results_prod['mse'][s] = mean_squared_error(Y_test, results_prod['Y_pred'][s,:,:], multioutput='uniform_average')
-            print 'Dataset: %i, GP_Kronprod: R2 = %f, MSE = %f, AUC = %f' %(s+1,results_prod['r2'][s], results_prod['mse'][s], results_prod['auc'][s]) 
+            print 'Dataset: %i, GP_Kronprod: R2 = %f, MSE = %f, AUC = %f, MSLL = %f' %(s+1,results_prod['r2'][s], results_prod['mse'][s], results_prod['auc'][s], results_prod['msll'][s]) 
             
         ################################# Kronsum Approach ########################
         if (method == 'sum' or  method == 'all'):     
@@ -203,12 +222,12 @@ if __name__ == "__main__":
             covar_o._K = SP.eye(n_samples)
             covar_s.X = hyperparams['X_s']
             covar_c.X = hyperparams['X_c']
-            X_o = SP.zeros((Y_train.shape[0], n_dimensions))
-            0.01
+            #X_o = SP.zeros((Y_train.shape[0], n_dimensions))
+
             gp = gp_kronsum.KronSumGP(covar_c = covar_c, covar_r = covar_r, covar_s = covar_s, 
                                       covar_o = covar_o)
-            gp.setData(Y = Y_train, X_r = X_train, X_o = X_o)  
-            
+            #gp.setData(Y = Y_train, X_r = X_train, X_o = X_o)  
+            gp.setData(Y = Y_train)  
             # Training: optimize hyperparameters
             hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
                                                               bounds, Ifilter = Ifilter)
@@ -218,8 +237,13 @@ if __name__ == "__main__":
             
             results_sum['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_sum['Y_pred'][s,:,:])
             results_sum['Y_pred_cov'][s,:,:] = results_sum['Y_pred_cov'][s,:,:] * Y_scaler.var_
-            results_sum['s_n2'][s,:] = np.diag(np.dot(hyperparams_opt['X_s'], hyperparams_opt['X_s'].T)) * Y_scaler.var_
-        
+            #results_sum['s_n2'][s,:] = np.diag(np.dot(hyperparams_opt['X_s'], hyperparams_opt['X_s'].T)) * Y_scaler.var_
+            results_sum['s_n2'][s,:] = np.diag(covar_s.K(hyperparams_opt['covar_s'])) * Y_scaler.var_
+            
+            results_sum['msll'][s] = MSLL(Y_test, np.squeeze(results_sum['Y_pred'][s,:,:]), 
+                                            np.squeeze(results_sum['Y_pred_cov'][s,:,:]), 
+                                            np.squeeze(results_sum['s_n2'][s,:]))            
+            
             results_sum['NPM'][s,:,:] = normative_prob_map(Y_test, results_sum['Y_pred'][s,:,:], 
                                          results_sum['Y_pred_cov'][s,:,:], results_sum['s_n2'][s,:])
             results_sum['abnormal_prob'][s,:] = extreme_value_prob(results_sum['NPM'][s,:,:], perc)
@@ -227,7 +251,7 @@ if __name__ == "__main__":
             
             results_sum['r2'][s] = np.mean(compute_r2(Y_test, results_sum['Y_pred'][s,:,:]))
             results_sum['mse'][s] = mean_squared_error(Y_test, results_sum['Y_pred'][s,:,:], multioutput='uniform_average')
-            print 'Dataset: %i, GP_Kronsum: R2 = %f, MSE = %f, AUC = %f' %(s+1,results_sum['r2'][s], results_sum['mse'][s], results_sum['auc'][s]) 
+            print 'Dataset: %i, GP_Kronsum: R2 = %f, MSE = %f, AUC = %f, MSLL = %f' %(s+1,results_sum['r2'][s], results_sum['mse'][s], results_sum['auc'][s], results_sum['msll'][s]) 
                              
     ########################################## Saving the results#############
         with open(save_path + dataset + '_Results_base.pkl', 'wb') as f:
