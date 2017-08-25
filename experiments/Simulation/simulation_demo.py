@@ -92,7 +92,7 @@ if __name__ == "__main__":
         n_samples = X_train.shape[0]
         n_tasks = Y_train.shape[1]
         n_dimensions = X_train.shape[1]
-        n_latent = 1
+        n_latent = 10
         
         # Normalization
         X_scaler = StandardScaler()
@@ -102,7 +102,6 @@ if __name__ == "__main__":
         Y_scaler = StandardScaler()
         Y_scaler.fit(Y_train)
         Y_train = Y_scaler.transform(Y_train)
-        Y_test_z = Y_scaler.transform(Y_test)
         
         ################################# GP_base Approach ########################
         if (method == 'base' or  method == 'all'):
@@ -126,7 +125,7 @@ if __name__ == "__main__":
             
             results_base['msll'][s] = MSLL(Y_test, np.squeeze(results_base['Y_pred'][s,:,:]), 
                                             np.squeeze(results_base['Y_pred_cov'][s,:,:]), 
-                                            np.squeeze(results_base['s_n2'][s,:]))            
+                                            np.squeeze(results_base['s_n2'][s,:]), Y_scaler)            
             
             results_base['NPM'][s,:,:] = normative_prob_map(Y_test, results_base['Y_pred'][s,:,:], 
                                             results_base['Y_pred_cov'][s,:,:], results_base['s_n2'][s,:])
@@ -155,12 +154,11 @@ if __name__ == "__main__":
             
             results_pool['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_pool['Y_pred'][s,:,:])    
             results_pool['Y_pred_cov'][s,:,:] = results_pool['Y_pred_cov'][s,:,:] * Y_scaler.var_
-            #results_pool['s_n2'][s,:] = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_ 
             results_pool['s_n2'][s,:] = likelihood.Kdiag(hyperparams_opt['lik'],n_tasks) * Y_scaler.var_
             
             results_pool['msll'][s] = MSLL(Y_test, np.squeeze(results_pool['Y_pred'][s,:,:]), 
                                             np.squeeze(results_pool['Y_pred_cov'][s,:,:]), 
-                                            np.squeeze(results_pool['s_n2'][s,:]))
+                                            np.squeeze(results_pool['s_n2'][s,:]), Y_scaler)
             
             results_pool['NPM'][s,:,:] = normative_prob_map(Y_test, results_pool['Y_pred'][s,:,:], 
                                           results_pool['Y_pred_cov'][s,:,:], results_pool['s_n2'][s,:])
@@ -190,12 +188,11 @@ if __name__ == "__main__":
             
             results_prod['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_prod['Y_pred'][s,:,:])
             results_prod['Y_pred_cov'][s,:,:] = results_prod['Y_pred_cov'][s,:,:] * Y_scaler.var_
-            #results_prod['s_n2'][s,:] = np.exp(2 * hyperparams_opt['lik']) * Y_scaler.var_
             results_prod['s_n2'][s,:] = likelihood.Kdiag(hyperparams_opt['lik'],n_tasks) * Y_scaler.var_
             
             results_prod['msll'][s] = MSLL(Y_test, np.squeeze(results_prod['Y_pred'][s,:,:]), 
                                             np.squeeze(results_prod['Y_pred_cov'][s,:,:]), 
-                                            np.squeeze(results_prod['s_n2'][s,:]))
+                                            np.squeeze(results_prod['s_n2'][s,:]), Y_scaler)
            
             results_prod['NPM'][s,:,:] = normative_prob_map(Y_test, results_prod['Y_pred'][s,:,:], 
                                                     results_prod['Y_pred_cov'][s,:,:], results_prod['s_n2'][s,:])
@@ -210,7 +207,6 @@ if __name__ == "__main__":
         if (method == 'sum' or  method == 'all'):     
             hyperparams, Ifilter, bounds = initialize.init('GPkronsum_LIN', Y_train.T, 
                                                            X_train, {'n_c' : n_latent, 'n_sigma' : n_latent})
-            # initialize covariance functions
             covar_c = lowrank.LowRankCF(n_dimensions = n_latent)
             covar_s = lowrank.LowRankCF(n_dimensions = n_latent)
             covar_r = linear.LinearCF(n_dimensions = n_dimensions)
@@ -226,7 +222,6 @@ if __name__ == "__main__":
 
             gp = gp_kronsum.KronSumGP(covar_c = covar_c, covar_r = covar_r, covar_s = covar_s, 
                                       covar_o = covar_o)
-            #gp.setData(Y = Y_train, X_r = X_train, X_o = X_o)  
             gp.setData(Y = Y_train)  
             # Training: optimize hyperparameters
             hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
@@ -237,12 +232,12 @@ if __name__ == "__main__":
             
             results_sum['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_sum['Y_pred'][s,:,:])
             results_sum['Y_pred_cov'][s,:,:] = results_sum['Y_pred_cov'][s,:,:] * Y_scaler.var_
-            #results_sum['s_n2'][s,:] = np.diag(np.dot(hyperparams_opt['X_s'], hyperparams_opt['X_s'].T)) * Y_scaler.var_
             results_sum['s_n2'][s,:] = np.diag(covar_s.K(hyperparams_opt['covar_s'])) * Y_scaler.var_
             
             results_sum['msll'][s] = MSLL(Y_test, np.squeeze(results_sum['Y_pred'][s,:,:]), 
                                             np.squeeze(results_sum['Y_pred_cov'][s,:,:]), 
-                                            np.squeeze(results_sum['s_n2'][s,:]))            
+                                            np.squeeze(results_sum['s_n2'][s,:]), Y_scaler)            
+            
             
             results_sum['NPM'][s,:,:] = normative_prob_map(Y_test, results_sum['Y_pred'][s,:,:], 
                                          results_sum['Y_pred_cov'][s,:,:], results_sum['s_n2'][s,:])

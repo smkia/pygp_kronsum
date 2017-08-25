@@ -199,10 +199,10 @@ class KronSumGP(GPLVM):
             KV['Ktilde_o'] = Ktilde_o; KV['Utilde_o'] = Utilde_o; KV['Stilde_o'] = Stilde_o
 
     
-        KV['UYtildeU_rc'] = SP.dot(KV['Utilde_r'].T,SP.dot(KV['USi_o'].T,SP.dot(self.Y,SP.dot(KV['USi_s'],KV['Utilde_c']))))  # Bug
+        KV['UYtildeU_rc'] = SP.dot(KV['Utilde_r'].T,SP.dot(KV['USi_o'].T,SP.dot(self.Y,SP.dot(KV['USi_s'],KV['Utilde_c']))))  
         #KV['UYtildeU_rc'] = SP.dot(KV['Utilde_r'].T, SP.dot(KV['USi_o'], SP.dot(self.Y, SP.dot(KV['USi_s_t'], KV['Utilde_c']))))
         
-        KV['UYtildeU_os'] = SP.dot(KV['Utilde_o'].T,SP.dot(KV['USi_r'].T,SP.dot(self.Y,SP.dot(KV['USi_c'],KV['Utilde_s']))))  # Bug
+        KV['UYtildeU_os'] = SP.dot(KV['Utilde_o'].T,SP.dot(KV['USi_r'].T,SP.dot(self.Y,SP.dot(KV['USi_c'],KV['Utilde_s']))))  
         #KV['UYtildeU_os'] = SP.dot(KV['Utilde_o'].T, SP.dot(KV['USi_r'], SP.dot(self.Y, SP.dot(KV['USi_c_t'], KV['Utilde_s']))))
         
         KV['Stilde_rc'] = SP.kron(KV['Stilde_c'],KV['Stilde_r']) + 1
