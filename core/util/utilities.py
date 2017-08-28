@@ -5,6 +5,7 @@ Created on Thu Jul 27 09:25:02 2017
 @author: Mosi
 """
 import scipy as SP
+import numpy as np
 
 def fast_dot(A, B):
     f_dot = SP.linalg.get_blas_funcs("gemm", arrays=(A.T, B.T))
@@ -53,6 +54,27 @@ def MSLL(Y_test, Y_test_hat, Y_test_sig, noise_variance, Y_scaler):
     MSLL = SP.mean(0.5 * SP.log(2 * SP.pi * Y_test_sig_star) + (Y_test - Y_test_hat)**2 / (2 * Y_test_sig_star) - 
             0.5 * SP.log(2 * SP.pi * Y_train_sig) - (Y_test - Y_train_mean)**2 / (2 * Y_train_sig))
     return MSLL
+    
+def data_simulation(n_samples, n_dimensions, n_tasks, n_latent, train_portion):
+    # true parameters
+    true_param = dict()
+    true_param['X_c'] = SP.random.randn(n_tasks, n_latent)
+    true_param['X_s'] = SP.random.randn(n_tasks, n_latent)
+    X = SP.random.randn(n_samples, n_dimensions) #/ SP.sqrt(n_dimensions)
+    R = SP.dot(X, X.T)
+    true_param['C'] = SP.dot(true_param['X_c'], true_param['X_c'].T)
+    true_param['Sigma'] = SP.dot(true_param['X_s'], true_param['X_s'].T)
+    K = SP.kron(true_param['C'], R) + SP.kron(true_param['Sigma'], SP.eye(n_samples))
+    y = SP.random.multivariate_normal(SP.zeros(n_tasks * n_samples), K)
+    Y = SP.reshape(y, (n_samples, n_tasks), order='F')
+    temp = SP.random.permutation(n_samples)
+    idx_train = temp[0 : np.int(train_portion * n_samples),]
+    idx_test = temp[np.int(train_portion * n_samples):,]
+    X_train = X[idx_train,:]
+    X_test = X[idx_test,:]
+    Y_train = Y[idx_train,:]
+    Y_test = Y[idx_test,:]
+    return X_train, X_test, Y_train, Y_test, true_param
 
 def storeHashHDF5(group,RV):
     for key,value in RV.iteritems():

@@ -23,13 +23,13 @@ class LinearCF(CovarianceFunction):
     
     @X.setter
     def X(self, X):
-        assert self.n_dimensions==X.shape[1], 'dimensions do not match'
+        #assert self.n_dimensions==X.shape[1], 'dimensions do not match'
         self._X = X
         self._XX = SP.dot(X,X.T)
 
     @Xcross.setter
     def Xcross(self, Xcross):
-        assert self.n_dimensions==Xcross.shape[1], 'dimensions do not match'
+        #assert self.n_dimensions==Xcross.shape[1], 'dimensions do not match'
         self._Xcross = Xcross
         self._XXcross = SP.dot(self._X,Xcross.T)
         

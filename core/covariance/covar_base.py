@@ -12,7 +12,7 @@ class CovarianceFunction(object):
 
     @X.setter
     def X(self, X):
-        assert self.n_dimensions==X.shape[1], 'dimensions do not match'
+        #assert self.n_dimensions==X.shape[1], 'dimensions do not match'
         self._X = X
 
     @property
@@ -21,7 +21,7 @@ class CovarianceFunction(object):
 
     @Xcross.setter
     def Xcross(self, Xcross):
-        assert self.n_dimensions==Xcross.shape[1], 'dimensions do not match'
+        #assert self.n_dimensions==Xcross.shape[1], 'dimensions do not match'
         self._Xcross = Xcross
         
     @property
