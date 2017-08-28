@@ -17,7 +17,7 @@ import core.covariance.lowrank as lowrank
 import core.covariance.diag as diag
 import core.optimize.optimize_base as optimize_base
 import core.priors.priors as prior
-import experiments.initialize as initialize
+import core.util.initialize as initialize
 
 import matplotlib.pylab as PLT
 
@@ -26,22 +26,23 @@ if __name__ == "__main__":
     n_latent = 1
     n_tasks = 10
     n_train = 100
-    n_dimensions = 100
+    n_features = 100
 
     # initialize covariance functions
     covar_c = lowrank.LowRankCF(n_dimensions=n_latent)
     covar_s = lowrank.LowRankCF(n_dimensions=n_latent)
-    covar_r = linear.LinearCF(n_dimensions=n_dimensions)
-    covar_o = diag.DiagIsoCF(n_dimensions = n_dimensions)
+    covar_r = linear.LinearCF(n_dimensions=n_train)
+    covar_o = diag.DiagIsoCF(n_dimensions = n_train)
 
     # true parameters
     X_c = SP.random.randn(n_tasks,n_latent)
     X_s = SP.random.randn(n_tasks,n_latent)
-    X_r = SP.random.randn(n_train,n_dimensions)/SP.sqrt(n_dimensions)
+    X_r = SP.random.randn(n_train,n_features) #/SP.sqrt(n_dimensions)
     R = SP.dot(X_r,X_r.T)
     C = SP.dot(X_c,X_c.T)
     Sigma = SP.dot(X_s,X_s.T)
     K = SP.kron(C,R) + SP.kron(Sigma,SP.eye(n_train))
+    SP.all(SP.linalg.eigvals(K)>=0)
     y = SP.random.multivariate_normal(SP.zeros(n_tasks*n_train),K)
     Y = SP.reshape(y,(n_train,n_tasks),order='F')
     

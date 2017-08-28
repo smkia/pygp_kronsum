@@ -107,7 +107,7 @@ if __name__ == "__main__":
         if (method == 'base' or  method == 'all'):
             for i in range(n_tasks):
                 hyperparams, Ifilter, bounds = initialize.init('GPbase_LIN', Y_train[:,i].T, X_train, None)
-                covariance = linear.LinearCF(n_dimensions = n_dimensions)
+                covariance = linear.LinearCF(n_dimensions = X_train.shape[0])
                 likelihood = lik.GaussIsoLik()
                 gp = gp_base.GP(covar=covariance, likelihood=likelihood)
                 gp.setData(Y = Y_train[:,i:i+1], X_r = X_train)  
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         if (method == 'pool' or  method == 'all'): 
             hyperparams, Ifilter, bounds = initialize.init('GPpool_LIN', Y_train.T, X_train, None)
             covar_c = linear.LinearCF(n_dimensions = 1) # vector of 1s
-            covar_r = linear.LinearCF(n_dimensions = n_dimensions)
+            covar_r = linear.LinearCF(n_dimensions = X_train.shape[0])
             likelihood = lik.GaussIsoLik()
             covar_r.X = X_train
             gp = gp_kronprod.KronProdGP(covar_r = covar_r, covar_c = covar_c, likelihood = likelihood)
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         if (method == 'prod' or  method == 'all'):              
             hyperparams, Ifilter, bounds = initialize.init('GPkronprod_LIN', Y_train.T, X_train, {'n_c' : n_latent})
             covar_c = lowrank.LowRankCF(n_dimensions = n_latent)
-            covar_r = linear.LinearCF(n_dimensions = n_dimensions)
+            covar_r = linear.LinearCF(n_dimensions = X_train.shape[0])
             likelihood = lik.GaussIsoLik()
             covar_r.X = X_train
             covar_c.X = hyperparams['X_c']
@@ -209,8 +209,8 @@ if __name__ == "__main__":
                                                            X_train, {'n_c' : n_latent, 'n_sigma' : n_latent})
             covar_c = lowrank.LowRankCF(n_dimensions = n_latent)
             covar_s = lowrank.LowRankCF(n_dimensions = n_latent)
-            covar_r = linear.LinearCF(n_dimensions = n_dimensions)
-            covar_o = diag.DiagIsoCF(n_dimensions = n_dimensions)  
+            covar_r = linear.LinearCF(n_dimensions = X_train.shape[0])
+            covar_o = diag.DiagIsoCF(n_dimensions = X_train.shape[0])  
             
             # initialize gp and its covariance functions
             covar_r.X = X_train
