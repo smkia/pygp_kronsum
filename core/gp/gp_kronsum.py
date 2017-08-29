@@ -94,7 +94,7 @@ class KronSumGP(GPLVM):
         Kstar_c = self.covar_c.K(hyperparams['covar_c']) # kernel over tasks is fixed!
         S = SP.kron(KV['Stilde_c'], KV['Stilde_r']) + 1
         USUc = SP.dot(SP.sqrt(1./KV['S_s']) * KV['U_s'],KV['Utilde_c'])  
-        #USUc = SP.dot(KV['Utilde_c'].T, SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])),KV['U_s'].T))
+        #USUc1 = SP.dot(KV['Utilde_c'].T, SP.dot(SP.diag(SP.sqrt(1./KV['S_s'])),KV['U_s'].T))
         USUr = SP.dot(SP.sqrt(1./KV['S_o']) * KV['U_o'],KV['Utilde_r'])
         #USUr = SP.dot(SP.dot(KV['U_o'], SP.diag(SP.sqrt(1./KV['S_o']))),KV['Utilde_r'])
         KinvY = SP.dot(USUr, SP.dot(unravel(ravel(KV['UYtildeU_rc']) * 1./S, self.n, self.t), USUc.T))
@@ -113,16 +113,13 @@ class KronSumGP(GPLVM):
             R_star_star = SP.exp(2 * hyperparams['covar_r']) * fast_dot(Xstar_r, Xstar_r.T)
             R_tr_star = Kstar_r
             C = Kstar_c
+                                          
+#            temp1 =  fast_kron(fast_dot(fast_dot(fast_dot(C, KV['U_s']), np.diag(SP.sqrt(1./KV['S_s']))),KV['Utilde_c']), 
+#                              fast_dot(fast_dot(fast_dot(R_tr_star.T, KV['U_o']), np.diag(SP.sqrt(1./KV['S_o']))),KV['Utilde_r']))
+#            Ystar_covar1 = SP.diag(fast_kron(C, R_star_star) - fast_dot(fast_dot(temp1,np.diag(1./S )),temp1.T))
                         
-#            Ystar_covar = SP.diag(fast_kron(C, R_star_star) - 
-#                fast_dot(1./S * fast_kron(fast_dot(fast_dot(C, KV['U_s'] * SP.sqrt(1./KV['S_s'])),KV['Utilde_c']), 
-#                                          fast_dot(fast_dot(R_tr_star.T, KV['U_o'] * SP.sqrt(1./KV['S_o'])),KV['Utilde_r'])), 
-#                                fast_kron(fast_dot(KV['Utilde_c'].T, fast_dot((SP.sqrt(1./KV['S_s']) * KV['U_s']).T, C)), 
-#                                          fast_dot(KV['Utilde_r'].T,fast_dot((SP.sqrt(1./KV['S_o']) * KV['U_o']).T,R_tr_star)))))
-                                          
-                                          
             temp =  fast_kron(fast_dot(fast_dot(C, KV['U_s'] * SP.sqrt(1./KV['S_s'])),KV['Utilde_c']), 
-                                          fast_dot(fast_dot(R_tr_star.T, KV['U_o'] * SP.sqrt(1./KV['S_o'])),KV['Utilde_r']))
+                              fast_dot(fast_dot(R_tr_star.T, KV['U_o'] * SP.sqrt(1./KV['S_o'])),KV['Utilde_r']))
             Ystar_covar = SP.diag(fast_kron(C, R_star_star)) - SP.sum((1./S * temp).T * temp.T, axis = 0)
             
             Ystar_covar = unravel(Ystar_covar, Xstar_r.shape[0], self.t)
