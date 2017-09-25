@@ -7,6 +7,19 @@ Created on Thu Jul 27 09:25:02 2017
 import scipy as SP
 import numpy as np
 
+def ravel(Y):
+    """
+    returns a flattened array: columns are concatenated
+    """
+    return SP.ravel(Y,order='F')
+
+def unravel(Y,n,t):
+    """
+    returns a nxt matrix from a raveled matrix
+    Y = uravel(ravel(Y))
+    """
+    return SP.reshape(Y,(n,t),order='F')
+
 def fast_dot(A, B):
     f_dot = SP.linalg.get_blas_funcs("gemm", arrays=(A.T, B.T))
     return f_dot(alpha=1.0, a = A.T, b = B.T, trans_a = True, trans_b = True)
