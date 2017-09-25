@@ -10,21 +10,7 @@ from gplvm import GPLVM
 
 from core.linalg.linalg_matrix import jitChol
 import core.likelihood.likelihood_base as likelihood_base
-from core.util.utilities import fast_dot, fast_kron
-
-
-def ravel(Y):
-    """
-    returns a flattened array: columns are concatenated
-    """
-    return SP.ravel(Y,order='F')
-
-def unravel(Y,n,t):
-    """
-    returns a nxt matrix from a raveled matrix
-    Y = uravel(ravel(Y))
-    """
-    return SP.reshape(Y,(n,t),order='F')
+from core.util.utilities import fast_dot, fast_kron, ravel, unravel
     
 class KronProdGP(GPLVM):
     """GPLVM for kronecker type covariance structures
@@ -50,16 +36,16 @@ class KronProdGP(GPLVM):
         set data
         Y:    Outputs [n x t]
         """
-        if Y!=None:
+        if type(Y) is SP.ndarray: 
             assert Y.ndim==2, 'Y must be a two dimensional vector'
             self.Y = Y
             self.n = Y.shape[0]
             self.t = Y.shape[1]
             self.nt = self.n * self.t
 
-        if X_r!=None:
+        if type(X_r) is SP.ndarray: 
             X = X_r
-        if X!=None:
+        if type(X) is SP.ndarray: 
             self.covar_r.X = X
 
         if X_c!=None:

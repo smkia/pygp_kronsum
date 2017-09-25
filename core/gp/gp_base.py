@@ -32,20 +32,21 @@ class GP(object):
         self._covar_cache = None
         self.prior = prior
         
-    def setData(self,Y=None,X=None,X_r=None,**kwargs):
+    def setData(self,Y,X=None,X_r=None,**kwargs):
         """
         set data
         Y:    Outputs [n x t]
         """
-        assert Y.ndim==2, 'Y must be a two dimensional vector'
-        self.Y = Y
-        self.n = Y.shape[0]
-        self.t = Y.shape[1]
-        self.nt = self.n * self.t
+        if type(Y) is SP.ndarray:         
+            assert Y.ndim==2, 'Y must be a two dimensional vector'
+            self.Y = Y
+            self.n = Y.shape[0]
+            self.t = Y.shape[1]
+            self.nt = self.n * self.t
 
-        if X_r!=None:
+        if type(X_r) is SP.ndarray:        
             X = X_r
-        if X!=None:
+        if type(X) is SP.ndarray:        
             self.covar.X = X
         
         self._invalidate_cache()
@@ -147,9 +148,9 @@ class GP(object):
         """
         predict on Xstar
         """
-        if Xstar_r!=None:
+        if (Xstar_r!=None).all():
             Xstar = Xstar_r
-        if Xstar != None:
+        if (Xstar != None).all():
             self.covar.Xcross = Xstar
         
         KV = self.get_covariances(hyperparams)
