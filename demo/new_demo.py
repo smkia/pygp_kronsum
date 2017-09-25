@@ -1,9 +1,8 @@
-#!/usr/bin/python2.7
-
 import scipy as SP
 import core.gp.gp_base as gp_base
 import core.gp.gp_kronprod as gp_kronprod
 import core.gp.gp_kronsum as gp_kronsum
+import core.gp.gp_kronprod2 as gp_kronprod2
 import core.covariance.linear as linear
 import core.covariance.diag as diag
 import core.covariance.lowrank as lowrank
@@ -14,6 +13,7 @@ from  sklearn.preprocessing import StandardScaler
 import core.likelihood.likelihood_base as lik
 from sklearn.metrics import mean_squared_error
 from core.util.utilities import data_simulation, compute_r2, MSLL
+from sklearn.decomposition import PCA
 import pickle
 
 if __name__ == "__main__":
@@ -50,6 +50,14 @@ if __name__ == "__main__":
                          'msll' : np.zeros([simulation_num,]),
                          'mse': np.zeros([simulation_num,]) 
                         })
+    
+    results_prod2 = dict({'Y_pred':np.zeros([simulation_num, np.int((1-train_portion)*n_samples),n_tasks]),
+                         'Y_pred_cov':np.zeros([simulation_num, np.int((1-train_portion)*n_samples),n_tasks]),
+                         's_n2' : np.zeros([simulation_num, n_tasks]),
+                         'r2' : np.zeros([simulation_num,]),
+                         'msll' : np.zeros([simulation_num,]),
+                         'mse': np.zeros([simulation_num,]) 
+                        })
                         
     results_sum = dict({'Y_pred':np.zeros([simulation_num, np.int((1-train_portion)*n_samples),n_tasks]),
                          'Y_pred_cov':np.zeros([simulation_num, np.int((1-train_portion)*n_samples),n_tasks]),
@@ -64,13 +72,13 @@ if __name__ == "__main__":
         X_train, X_test, Y_train, Y_test, true_param = data_simulation(n_samples, n_dimensions, n_tasks, n_latent, train_portion) 
         
         # Normalization
-        #X_scaler = StandardScaler()
-        #X_scaler.fit(X_train)
-        #X_train = X_scaler.transform(X_train)
-        #X_test = X_scaler.transform(X_test)
+        X_scaler = StandardScaler()
+        X_scaler.fit(X_train)
+        X_train = X_scaler.transform(X_train)
+        X_test = X_scaler.transform(X_test)
         Y_scaler = StandardScaler()
         Y_scaler.fit(Y_train)
-        #Y_train = Y_scaler.transform(Y_train)
+        Y_train = Y_scaler.transform(Y_train)
         
         ################################# GP_base Approach ########################
         if (method == 'base' or  method == 'all'):
@@ -144,7 +152,7 @@ if __name__ == "__main__":
             hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
                                                               bounds, Ifilter = Ifilter)
             # Testing
-            results_prod['Y_pred'][s,:,:], results_prod['Y_pred_cov'][s,:,:] = gp.predict(hyperparams_opt, Xstar_r = X_test , compute_cov = True)
+            results_prod['Y_pred'][s,:,:], results_prod['Y_pred_cov'][s,:,:] = gp.predict(hyperparams_opt, Xstar_r = X_test, compute_cov = True)
             
             #results_prod['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_prod['Y_pred'][s,:,:])
             #results_prod['Y_pred_cov'][s,:,:] = results_prod['Y_pred_cov'][s,:,:] * Y_scaler.var_
@@ -197,6 +205,39 @@ if __name__ == "__main__":
             results_sum['r2'][s] = np.mean(compute_r2(Y_test, results_sum['Y_pred'][s,:,:]))
             results_sum['mse'][s] = mean_squared_error(Y_test, results_sum['Y_pred'][s,:,:], multioutput='uniform_average')
             print 'Dataset: %i, GP_Kronsum: R2 = %f, MSE = %f, MSLL = %f' %(s+1,results_sum['r2'][s], results_sum['mse'][s], results_sum['msll'][s]) 
+            
+        ################################# Kronprod2 Approach ########################
+        if (method == 'prod2' or  method == 'all'):
+            pca = PCA(n_components=2)
+            Y_train_hat = pca.fit_transform(Y_train)
+            B = pca.components_.T
+            hyperparams, Ifilter, bounds = initialize.init('GPkronprod_LIN', Y_train_hat.T, X_train, {'n_c' : n_latent})
+            covar_c = lowrank.LowRankCF(n_dimensions = n_latent)
+            covar_r = linear.LinearCF(n_dimensions = X_train.shape[0])
+            likelihood = lik.GaussIsoLik()
+            covar_r.X = X_train
+            covar_c.X = hyperparams['X_c']
+            gp = gp_kronprod2.KronProdGP(covar_r = covar_r, covar_c = covar_c, likelihood = likelihood, basis = B)
+            gp.setData(Y = Y_train, Y_hat = Y_train_hat, X_r = X_train)
+            
+            # Training: optimize hyperparameters
+            hyperparams_opt,lml_opt = optimize_base.opt_hyper(gp, hyperparams, bounds = 
+                                                              bounds, Ifilter = Ifilter)
+            # Testing
+            results_prod2['Y_pred'][s,:,:], results_prod2['Y_pred_cov'][s,:,:] = gp.predict(hyperparams_opt, Xstar_r = X_test, compute_cov = True)
+            
+            #results_prod['Y_pred'][s,:,:] = Y_scaler.inverse_transform(results_prod['Y_pred'][s,:,:])
+            #results_prod['Y_pred_cov'][s,:,:] = results_prod['Y_pred_cov'][s,:,:] * Y_scaler.var_
+            results_prod2['s_n2'][s,:] = likelihood.Kdiag(hyperparams_opt['lik'],n_tasks) #* Y_scaler.var_
+            
+            results_prod2['msll'][s] = MSLL(Y_test, np.squeeze(results_prod2['Y_pred'][s,:,:]), 
+                                            np.squeeze(results_prod2['Y_pred_cov'][s,:,:]), 
+                                            np.squeeze(results_prod2['s_n2'][s,:]), Y_scaler)
+            
+            results_prod2['r2'][s] = np.mean(compute_r2(Y_test, results_prod2['Y_pred'][s,:,:]))
+            results_prod2['mse'][s] = mean_squared_error(Y_test, results_prod2['Y_pred'][s,:,:], multioutput='uniform_average')
+            print 'Dataset: %i, GP_Kronprod: R2 = %f, MSE = %f, MSLL = %f' %(s+1,results_prod2['r2'][s], results_prod2['mse'][s], results_prod2['msll'][s]) 
+                    
 
 ########################################## Saving the results#############
         with open(save_path + dataset + '_Results_base.pkl', 'wb') as f:
@@ -209,5 +250,8 @@ if __name__ == "__main__":
                     pickle.dump(results_prod, f)
                                      
         with open(save_path + dataset + '_Results_sum.pkl', 'wb') as f:
-                pickle.dump(results_sum, f)  
+                pickle.dump(results_sum, f) 
+                
+        with open(save_path + dataset + '_Results_prod2.pkl', 'wb') as f:
+                pickle.dump(results_prod2, f)
                              
